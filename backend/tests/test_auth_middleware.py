@@ -5,7 +5,6 @@ from starlette.testclient import TestClient
 
 from app.gateway.auth_middleware import AuthMiddleware, _is_public
 
-
 # ── _is_public unit tests ─────────────────────────────────────────────────
 
 
