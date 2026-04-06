@@ -6,7 +6,7 @@ no-op on needs_setup=False, migration, and edge cases.
 
 import asyncio
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, patch
 
@@ -16,7 +16,6 @@ os.environ.setdefault("AUTH_JWT_SECRET", "test-secret-key-ensure-admin-testing-m
 
 from app.gateway.auth.config import AuthConfig, set_auth_config
 from app.gateway.auth.models import User
-
 
 _JWT_SECRET = "test-secret-key-ensure-admin-testing-min-32"
 
@@ -110,7 +109,7 @@ def test_needs_setup_true_resets_password():
         system_role="admin",
         needs_setup=True,
         token_version=0,
-        created_at=datetime.now(timezone.utc) - timedelta(seconds=30),
+        created_at=datetime.now(UTC) - timedelta(seconds=30),
     )
     provider = _make_provider(user_count=1, admin_user=admin)
     app = _make_app_stub()
@@ -135,7 +134,7 @@ def test_needs_setup_true_consecutive_resets_increment_version():
         system_role="admin",
         needs_setup=True,
         token_version=3,
-        created_at=datetime.now(timezone.utc) - timedelta(seconds=30),
+        created_at=datetime.now(UTC) - timedelta(seconds=30),
     )
     provider = _make_provider(user_count=1, admin_user=admin)
     app = _make_app_stub()

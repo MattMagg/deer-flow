@@ -16,12 +16,12 @@ import pytest
 
 os.environ.setdefault("AUTH_JWT_SECRET", "test-secret-key-for-langgraph-auth-testing-min-32")
 
+from langgraph_sdk import Auth
+
 from app.gateway.auth.config import AuthConfig, set_auth_config
 from app.gateway.auth.jwt import create_access_token, decode_token
 from app.gateway.auth.models import User
 from app.gateway.langgraph_auth import add_owner_filter, authenticate
-from langgraph_sdk import Auth
-
 
 # ── Helpers ───────────────────────────────────────────────────────────────
 

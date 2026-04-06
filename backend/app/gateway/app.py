@@ -2,6 +2,7 @@ import logging
 import os
 from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
+from datetime import UTC
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -82,9 +83,8 @@ async def _ensure_admin_user(app: FastAPI) -> None:
     admin = await provider.get_user_by_email("admin@deerflow.dev")
     if admin and admin.needs_setup:
         import time
-        from datetime import timezone
 
-        age = time.time() - admin.created_at.replace(tzinfo=timezone.utc).timestamp()
+        age = time.time() - admin.created_at.replace(tzinfo=UTC).timestamp()
         if age < 30:
             return  # Just created by another worker in this startup; its password is still valid.
 
