@@ -113,7 +113,7 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
       const now = Date.now();
       if (now - lastCheckRef.current < 60_000) return;
       lastCheckRef.current = now;
-      refreshUser();
+      void refreshUser();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
