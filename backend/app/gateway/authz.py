@@ -116,6 +116,7 @@ _ALL_PERMISSIONS: list[str] = [
     Permissions.RUNS_CANCEL,
 ]
 
+
 async def _authenticate(request: Request) -> AuthContext:
     """Authenticate request and return AuthContext.
 

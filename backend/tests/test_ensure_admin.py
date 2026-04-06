@@ -38,12 +38,14 @@ def _make_app_stub(store=None):
 def _make_provider(user_count=0, admin_user=None):
     p = AsyncMock()
     p.count_users = AsyncMock(return_value=user_count)
-    p.create_user = AsyncMock(side_effect=lambda **kw: User(
-        email=kw["email"],
-        password_hash="hashed",
-        system_role=kw.get("system_role", "user"),
-        needs_setup=kw.get("needs_setup", False),
-    ))
+    p.create_user = AsyncMock(
+        side_effect=lambda **kw: User(
+            email=kw["email"],
+            password_hash="hashed",
+            system_role=kw.get("system_role", "user"),
+            needs_setup=kw.get("needs_setup", False),
+        )
+    )
     p.get_user_by_email = AsyncMock(return_value=admin_user)
     p.update_user = AsyncMock(side_effect=lambda u: u)
     return p
@@ -60,6 +62,7 @@ def test_first_boot_creates_admin():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="hashed"):
             from app.gateway.app import _ensure_admin_user
+
             asyncio.run(_ensure_admin_user(app))
 
     provider.create_user.assert_called_once()
@@ -80,6 +83,7 @@ def test_first_boot_triggers_migration_if_store_present():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="hashed"):
             from app.gateway.app import _ensure_admin_user
+
             asyncio.run(_ensure_admin_user(app))
 
     store.asearch.assert_called_once()
@@ -93,6 +97,7 @@ def test_first_boot_no_store_skips_migration():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="hashed"):
             from app.gateway.app import _ensure_admin_user
+
             asyncio.run(_ensure_admin_user(app))
 
     provider.create_user.assert_called_once()
@@ -117,6 +122,7 @@ def test_needs_setup_true_resets_password():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="new-hash"):
             from app.gateway.app import _ensure_admin_user
+
             asyncio.run(_ensure_admin_user(app))
 
     # Password was reset
@@ -142,6 +148,7 @@ def test_needs_setup_true_consecutive_resets_increment_version():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="new-hash"):
             from app.gateway.app import _ensure_admin_user
+
             asyncio.run(_ensure_admin_user(app))
 
     updated = provider.update_user.call_args[0][0]
@@ -165,6 +172,7 @@ def test_needs_setup_false_no_reset():
 
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         from app.gateway.app import _ensure_admin_user
+
         asyncio.run(_ensure_admin_user(app))
 
     provider.update_user.assert_not_called()
@@ -182,6 +190,7 @@ def test_no_admin_email_found_no_crash():
 
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         from app.gateway.app import _ensure_admin_user
+
         asyncio.run(_ensure_admin_user(app))
 
     provider.update_user.assert_not_called()
@@ -198,6 +207,7 @@ def test_migration_failure_is_non_fatal():
     with patch("app.gateway.deps.get_local_provider", return_value=provider):
         with patch("app.gateway.auth.password.hash_password_async", new_callable=AsyncMock, return_value="hashed"):
             from app.gateway.app import _ensure_admin_user
+
             # Should not raise
             asyncio.run(_ensure_admin_user(app))
 

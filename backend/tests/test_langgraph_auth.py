@@ -124,6 +124,7 @@ def test_provider_exception_propagates():
 def test_jwt_missing_ver_defaults_to_zero():
     """JWT without 'ver' claim → decoded as ver=0, matches user with token_version=0."""
     import jwt as pyjwt
+
     uid = str(uuid4())
     raw = pyjwt.encode({"sub": uid, "exp": 9999999999, "iat": 1000000000}, _JWT_SECRET, algorithm="HS256")
     user = _user(user_id=uid, token_version=0)
@@ -135,6 +136,7 @@ def test_jwt_missing_ver_defaults_to_zero():
 def test_jwt_missing_ver_rejected_when_user_version_nonzero():
     """JWT without 'ver' (defaults 0) vs user with token_version=1 → 401."""
     import jwt as pyjwt
+
     uid = str(uuid4())
     raw = pyjwt.encode({"sub": uid, "exp": 9999999999, "iat": 1000000000}, _JWT_SECRET, algorithm="HS256")
     user = _user(user_id=uid, token_version=1)
@@ -147,6 +149,7 @@ def test_jwt_missing_ver_rejected_when_user_version_nonzero():
 def test_wrong_secret_raises_401():
     """Token signed with different secret → 401."""
     import jwt as pyjwt
+
     raw = pyjwt.encode({"sub": "user-1", "exp": 9999999999, "ver": 0}, "wrong-secret-that-is-long-enough-32chars!", algorithm="HS256")
     with pytest.raises(Auth.exceptions.HTTPException) as exc:
         asyncio.run(authenticate(_req({"access_token": raw})))
@@ -158,6 +161,7 @@ def test_wrong_secret_raises_401():
 
 class _FakeUser:
     """Minimal BaseUser-compatible object without langgraph_api.config dependency."""
+
     def __init__(self, identity: str):
         self.identity = identity
         self.is_authenticated = True
@@ -220,6 +224,7 @@ def test_shared_jwt_secret():
     token = create_access_token("user-1", token_version=3)
     payload = decode_token(token)
     from app.gateway.auth.errors import TokenError
+
     assert not isinstance(payload, TokenError)
     assert payload.sub == "user-1"
     assert payload.ver == 3
@@ -227,6 +232,7 @@ def test_shared_jwt_secret():
 
 def test_langgraph_json_has_auth_path():
     import json
+
     config = json.loads((Path(__file__).parent.parent / "langgraph.json").read_text())
     assert "auth" in config
     assert "langgraph_auth" in config["auth"]["path"]
@@ -234,6 +240,7 @@ def test_langgraph_json_has_auth_path():
 
 def test_auth_handler_has_both_layers():
     from app.gateway.langgraph_auth import auth
+
     assert auth._authenticate_handler is not None
     assert len(auth._global_handlers) == 1
 
@@ -261,11 +268,15 @@ def test_csrf_post_missing_token():
 def test_csrf_post_mismatched_token():
     """POST with mismatched CSRF tokens → 403."""
     with pytest.raises(Auth.exceptions.HTTPException) as exc:
-        asyncio.run(authenticate(_req(
-            method="POST",
-            cookies={"access_token": "some-jwt", "csrf_token": "real-token"},
-            headers={"x-csrf-token": "wrong-token"},
-        )))
+        asyncio.run(
+            authenticate(
+                _req(
+                    method="POST",
+                    cookies={"access_token": "some-jwt", "csrf_token": "real-token"},
+                    headers={"x-csrf-token": "wrong-token"},
+                )
+            )
+        )
     assert exc.value.status_code == 403
     assert "mismatch" in str(exc.value.detail)
 
@@ -273,11 +284,15 @@ def test_csrf_post_mismatched_token():
 def test_csrf_post_matching_token_proceeds_to_jwt():
     """POST with matching CSRF tokens passes CSRF check, then fails on JWT."""
     with pytest.raises(Auth.exceptions.HTTPException) as exc:
-        asyncio.run(authenticate(_req(
-            method="POST",
-            cookies={"access_token": "garbage", "csrf_token": "same-token"},
-            headers={"x-csrf-token": "same-token"},
-        )))
+        asyncio.run(
+            authenticate(
+                _req(
+                    method="POST",
+                    cookies={"access_token": "garbage", "csrf_token": "same-token"},
+                    headers={"x-csrf-token": "same-token"},
+                )
+            )
+        )
     # Past CSRF, rejected by JWT decode
     assert exc.value.status_code == 401
     assert "Token error" in str(exc.value.detail)

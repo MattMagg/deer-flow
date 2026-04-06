@@ -103,7 +103,6 @@ async def _ensure_admin_user(app: FastAPI) -> None:
         logger.info("=" * 60)
 
 
-
 async def _migrate_orphaned_threads(store, admin_user_id: str) -> None:
     """Migrate threads with no user_id to the given admin."""
     try:

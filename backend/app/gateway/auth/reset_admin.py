@@ -46,9 +46,9 @@ async def _find_admin(repo: SQLiteUserRepository, email: str | None):
     if email:
         return await repo.get_user_by_email(email)
     # Find first admin
-    from app.gateway.auth.repositories.sqlite import _get_users_conn
-
     import asyncio
+
+    from app.gateway.auth.repositories.sqlite import _get_users_conn
 
     def _find_sync():
         with _get_users_conn() as conn:
