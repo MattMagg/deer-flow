@@ -12,15 +12,14 @@ http {
 
     access_log /dev/stdout;
     error_log /dev/stderr;
-
-    upstream gateway_backend {
-        server ${GATEWAY_UPSTREAM};
-    }
+    resolver ${NGINX_RESOLVER} valid=10s;
+    resolver_timeout 5s;
 
     server {
         listen ${NGINX_LISTEN_PORT} default_server;
         listen [::]:${NGINX_LISTEN_PORT} default_server;
         server_name _;
+        set $gateway_backend http://${GATEWAY_UPSTREAM};
 
         proxy_hide_header 'Access-Control-Allow-Origin';
         proxy_hide_header 'Access-Control-Allow-Methods';
@@ -37,7 +36,7 @@ http {
 
         location /api/langgraph/ {
             rewrite ^/api/langgraph/(.*) /api/$1 break;
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -54,7 +53,7 @@ http {
         }
 
         location /api/ {
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -73,7 +72,7 @@ http {
         }
 
         location /health {
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -82,7 +81,7 @@ http {
         }
 
         location /docs {
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -91,7 +90,7 @@ http {
         }
 
         location /redoc {
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
@@ -100,7 +99,7 @@ http {
         }
 
         location /openapi.json {
-            proxy_pass http://gateway_backend;
+            proxy_pass $gateway_backend;
             proxy_http_version 1.1;
             proxy_set_header Host $host;
             proxy_set_header X-Real-IP $remote_addr;
