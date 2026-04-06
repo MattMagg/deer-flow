@@ -1,3 +1,5 @@
+import { buildLoginUrl } from "@/core/auth/types";
+
 /**
  * Fetch with credentials. Automatically redirects to login on 401.
  */
@@ -11,53 +13,12 @@ export async function fetchWithAuth(
     credentials: "include",
   });
 
-  // Handle 401 - redirect to login
   if (res.status === 401) {
-    const currentPath = window.location.pathname;
-    const loginUrl = `/login?next=${encodeURIComponent(currentPath)}`;
-    window.location.href = loginUrl;
+    window.location.href = buildLoginUrl(window.location.pathname);
     throw new Error("Unauthorized");
   }
 
   return res;
-}
-
-/**
- * GET request with auth
- */
-export async function getWithAuth<T>(
-  url: string,
-  init?: RequestInit,
-): Promise<T> {
-  const res = await fetchWithAuth(url, init);
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`);
-  }
-  return res.json();
-}
-
-/**
- * POST request with auth
- */
-export async function postWithAuth<T>(
-  url: string,
-  data?: unknown,
-  init?: RequestInit,
-): Promise<T> {
-  const res = await fetchWithAuth(url, {
-    ...init,
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      ...getCsrfHeaders(),
-      ...init?.headers,
-    },
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    throw new Error(`Request failed: ${res.status}`);
-  }
-  return res.json();
 }
 
 /**

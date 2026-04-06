@@ -17,6 +17,11 @@ CSRF_HEADER_NAME = "X-CSRF-Token"
 CSRF_TOKEN_LENGTH = 64  # bytes
 
 
+def is_secure_request(request: Request) -> bool:
+    """Detect whether the original client request was made over HTTPS."""
+    return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+
+
 def generate_csrf_token() -> str:
     """Generate a secure random CSRF token."""
     return secrets.token_urlsafe(CSRF_TOKEN_LENGTH)
@@ -86,7 +91,7 @@ class CSRFMiddleware(BaseHTTPMiddleware):
         if _is_auth and request.method == "POST":
             # Generate a new CSRF token for the session
             csrf_token = generate_csrf_token()
-            is_https = request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
+            is_https = is_secure_request(request)
             response.set_cookie(
                 key=CSRF_COOKIE_NAME,
                 value=csrf_token,

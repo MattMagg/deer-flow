@@ -57,7 +57,7 @@ token_version INTEGER NOT NULL DEFAULT 0
 Gateway lifespan 启动
   ↓
 count_users() == 0?
-  ├─ YES → 创建 admin@localhost (needs_setup=True, 随机密码)
+  ├─ YES → 创建 admin@deerflow.dev (needs_setup=True, 随机密码)
   │         → 迁移无 user_id 的 thread 到 admin
   │         → 控制台输出邮箱 + 密码
   ├─ NO, 有 needs_setup=True 的用户 → 日志提醒完成设置或用 reset_admin
@@ -71,31 +71,35 @@ count_users() == 0?
 
 ### SQLite WAL 模式
 
-`_get_connection()` 中执行 `PRAGMA journal_mode=WAL`。允许并发读 + 单写不阻塞读。
+`_init_users_table()` 中执行 `PRAGMA journal_mode=WAL`（首次建表时设置，DB 级持久生效）。允许并发读 + 单写不阻塞读。
 
 ## Auth Enforcement
 
-### 全局 Auth Middleware
+### 双层 Auth 架构
+
+**第一层：全局 AuthMiddleware**（`gateway/auth_middleware.py`，fail-closed safety net）
 
 ```python
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
-        if _is_public_path(request.url.path):
+        if _is_public(request.url.path):
             return await call_next(request)
-        # 验证 JWT cookie → 401 if invalid
+        if not request.cookies.get("access_token"):
+            return JSONResponse(401, ...)
+        return await call_next(request)
 ```
 
-**Public allowlist:**
-- `/health`
-- `/api/v1/auth/login/local`
-- `/api/v1/auth/register`
-- `/api/v1/auth/setup-status`
-- `/api/v1/auth/logout`
-- `/docs`, `/openapi.json`
+仅检查 cookie 是否存在，不验证签名。新 endpoint 即使忘加装饰器也不会裸奔。
 
-其他所有 `/api/*` 默认需要认证。
+**Public path 规则：**
+- 前缀匹配：`/health`, `/docs`, `/redoc`, `/openapi.json`, `/api/v1/auth/`
+- 其他所有路径默认需要 cookie
 
-**与装饰器的关系：** Middleware 做粗粒度拦截（有没有合法 cookie）。`@require_auth` + `@require_permission` 做细粒度控制（owner check、权限）。两层不冲突。
+**第二层：`@require_auth` + `@require_permission` 装饰器**（`gateway/authz.py`，细粒度控制）
+
+验证 JWT 签名、用户存在性、token_version、resource:action 权限、owner_check。
+
+两层职责不同、互不替代。
 
 ### CSRF
 
@@ -200,7 +204,7 @@ python -m app.gateway.auth.reset_admin [--email user@example.com]
 | `auth/jwt.py` | encode 加 `ver`，TokenPayload 加 `ver` |
 | `auth/repositories/sqlite.py` | DDL 加列 + ALTER TABLE 兼容 + WAL 模式 |
 | `gateway/app.py` | `_ensure_admin_user` + thread 迁移 + AuthMiddleware |
-| `gateway/auth_middleware.py` | 新文件，全局 auth middleware |
+| `gateway/auth_middleware.py` | 全局 auth middleware（cookie 存在性检查，fail-closed safety net） |
 | `gateway/deps.py` | decode 后校验 `token_version` |
 | `gateway/routers/auth.py` | login 返回 `needs_setup`，change-password 扩展 `new_email` + `needs_setup` + `token_version` |
 | `gateway/routers/auth.py` | 登录限速 |

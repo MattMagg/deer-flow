@@ -431,6 +431,59 @@ def test_rate_limiter_resets_on_success():
     _check_rate_limit(ip)  # Should not raise
 
 
+# ── Client IP extraction ─────────────────────────────────────────────────
+
+
+def test_get_client_ip_direct_connection():
+    """Without nginx (no X-Real-IP), falls back to request.client.host."""
+    from app.gateway.routers.auth import _get_client_ip
+
+    req = MagicMock()
+    req.client.host = "203.0.113.42"
+    req.headers = {}
+    assert _get_client_ip(req) == "203.0.113.42"
+
+
+def test_get_client_ip_uses_x_real_ip():
+    """X-Real-IP (set by nginx) is used when present."""
+    from app.gateway.routers.auth import _get_client_ip
+
+    req = MagicMock()
+    req.client.host = "10.0.0.1"  # uvicorn may have replaced this with XFF[0]
+    req.headers = {"x-real-ip": "203.0.113.42"}
+    assert _get_client_ip(req) == "203.0.113.42"
+
+
+def test_get_client_ip_xff_ignored():
+    """X-Forwarded-For is never used; only X-Real-IP matters."""
+    from app.gateway.routers.auth import _get_client_ip
+
+    req = MagicMock()
+    req.client.host = "10.0.0.1"
+    req.headers = {"x-forwarded-for": "10.0.0.1, 198.51.100.5", "x-real-ip": "198.51.100.5"}
+    assert _get_client_ip(req) == "198.51.100.5"
+
+
+def test_get_client_ip_no_real_ip_fallback():
+    """No X-Real-IP → falls back to client.host (direct connection)."""
+    from app.gateway.routers.auth import _get_client_ip
+
+    req = MagicMock()
+    req.client.host = "127.0.0.1"
+    req.headers = {}
+    assert _get_client_ip(req) == "127.0.0.1"
+
+
+def test_get_client_ip_x_real_ip_always_preferred():
+    """X-Real-IP is always preferred over client.host regardless of IP."""
+    from app.gateway.routers.auth import _get_client_ip
+
+    req = MagicMock()
+    req.client.host = "203.0.113.99"
+    req.headers = {"x-real-ip": "198.51.100.7"}
+    assert _get_client_ip(req) == "198.51.100.7"
+
+
 # ── Weak JWT secret warning ──────────────────────────────────────────────────
 
 

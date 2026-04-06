@@ -10,7 +10,7 @@ import React, {
   type ReactNode,
 } from "react";
 
-import { type User } from "./types";
+import { type User, buildLoginUrl } from "./types";
 
 // Re-export for consumers
 export type { User };
@@ -68,7 +68,7 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
         setUser(null);
         // Redirect to login if on a protected route
         if (pathname?.startsWith("/workspace")) {
-          router.push(`/login?next=${encodeURIComponent(pathname)}`);
+          router.push(buildLoginUrl(pathname));
         }
       }
     } catch (err) {
@@ -102,34 +102,25 @@ export function AuthProvider({ children, initialUser }: AuthProviderProps) {
   }, [router]);
 
   /**
-   * Handle visibility change - refresh user when tab becomes visible again
-   * This handles the case where session might have expired while tab was hidden
+   * Handle visibility change - refresh user when tab becomes visible again.
+   * Throttled to at most once per 60 s to avoid spamming the backend on rapid tab switches.
    */
+  const lastCheckRef = React.useRef(0);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible" && user !== null) {
-        // Silently check if session is still valid
-        fetch("/api/v1/auth/me", { credentials: "include" })
-          .then((res) => {
-            if (res.status === 401) {
-              // Session expired while tab was hidden
-              setUser(null);
-              if (pathname?.startsWith("/workspace")) {
-                router.push(`/login?next=${encodeURIComponent(pathname)}`);
-              }
-            }
-          })
-          .catch(() => {
-            // Network error, don't disrupt the user
-          });
-      }
+      if (document.visibilityState !== "visible" || user === null) return;
+      const now = Date.now();
+      if (now - lastCheckRef.current < 60_000) return;
+      lastCheckRef.current = now;
+      refreshUser();
     };
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
     return () => {
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [user, pathname, router]);
+  }, [user, refreshUser]);
 
   const value: AuthContextType = {
     user,
@@ -166,9 +157,7 @@ export function useRequireAuth(): AuthContextType {
   useEffect(() => {
     // Only redirect if we're sure user is not authenticated (not just loading)
     if (!auth.isLoading && !auth.isAuthenticated) {
-      router.push(
-        `/login?next=${encodeURIComponent(pathname || "/workspace")}`,
-      );
+      router.push(buildLoginUrl(pathname || "/workspace"));
     }
   }, [auth.isAuthenticated, auth.isLoading, router, pathname]);
 

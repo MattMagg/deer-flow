@@ -13,6 +13,7 @@ from app.gateway.auth import (
 )
 from app.gateway.auth.config import get_auth_config
 from app.gateway.auth.errors import AuthErrorCode, AuthErrorResponse
+from app.gateway.csrf_middleware import is_secure_request
 from app.gateway.deps import get_current_user_from_request, get_local_provider
 
 logger = logging.getLogger(__name__)
@@ -54,15 +55,10 @@ class MessageResponse(BaseModel):
 # ── Helpers ───────────────────────────────────────────────────────────────
 
 
-def _is_secure_request(request: Request) -> bool:
-    """Detect whether the original client request was made over HTTPS."""
-    return request.headers.get("x-forwarded-proto", request.url.scheme) == "https"
-
-
 def _set_session_cookie(response: Response, token: str, request: Request) -> None:
     """Set the access_token HttpOnly cookie on the response."""
     config = get_auth_config()
-    is_https = _is_secure_request(request)
+    is_https = is_secure_request(request)
     response.set_cookie(
         key="access_token",
         value=token,
@@ -81,6 +77,28 @@ _LOCKOUT_SECONDS = 300  # 5 minutes
 
 # ip → (fail_count, lock_until_timestamp)
 _login_attempts: dict[str, tuple[int, float]] = {}
+
+
+def _get_client_ip(request: Request) -> str:
+    """Extract the real client IP for rate limiting.
+
+    Uses ``X-Real-IP`` header set by nginx (``proxy_set_header X-Real-IP
+    $remote_addr``).  Nginx unconditionally overwrites any client-supplied
+    ``X-Real-IP``, so the value seen by Gateway is always the TCP peer IP
+    that nginx observed — it cannot be spoofed by the client.
+
+    ``request.client.host`` is NOT reliable because uvicorn's default
+    ``proxy_headers=True`` replaces it with the *first* entry from
+    ``X-Forwarded-For``, which IS client-spoofable.
+
+    ``X-Forwarded-For`` is intentionally NOT used for the same reason.
+    """
+    real_ip = request.headers.get("x-real-ip", "").strip()
+    if real_ip:
+        return real_ip
+
+    # Fallback: direct connection without nginx (e.g. unit tests, dev).
+    return request.client.host if request.client else "unknown"
 
 
 def _check_rate_limit(ip: str) -> None:
@@ -109,9 +127,12 @@ def _record_login_failure(ip: str) -> None:
         expired = [k for k, (c, t) in _login_attempts.items() if c >= _MAX_LOGIN_ATTEMPTS and now >= t]
         for k in expired:
             del _login_attempts[k]
-        # If still too large, drop oldest sub-threshold entries
+        # If still too large, evict cheapest-to-lose half: below-threshold
+        # IPs (lock_until=0.0) sort first, then earliest-expiring lockouts.
         if len(_login_attempts) >= _MAX_TRACKED_IPS:
-            _login_attempts.clear()
+            by_time = sorted(_login_attempts.items(), key=lambda kv: kv[1][1])
+            for k, _ in by_time[: len(by_time) // 2]:
+                del _login_attempts[k]
 
     record = _login_attempts.get(ip)
     if record is None:
@@ -137,7 +158,7 @@ async def login_local(
     form_data: OAuth2PasswordRequestForm = Depends(),
 ):
     """Local email/password login."""
-    client_ip = request.client.host if request.client else "unknown"
+    client_ip = _get_client_ip(request)
     _check_rate_limit(client_ip)
 
     user = await get_local_provider().authenticate({"email": form_data.username, "password": form_data.password})
@@ -183,7 +204,7 @@ async def register(request: Request, response: Response, body: RegisterRequest):
 @router.post("/logout", response_model=MessageResponse)
 async def logout(request: Request, response: Response):
     """Logout current user by clearing the cookie."""
-    response.delete_cookie(key="access_token", secure=_is_secure_request(request), samesite="lax")
+    response.delete_cookie(key="access_token", secure=is_secure_request(request), samesite="lax")
     return MessageResponse(message="Successfully logged out")
 
 

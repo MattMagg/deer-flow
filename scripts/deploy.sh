@@ -56,6 +56,13 @@ esac
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_ROOT"
 
+# Load .env so build args (APT_MIRROR, NODE_DIST_URL, UV_INDEX_URL, etc.) are available
+if [ -f "$REPO_ROOT/.env" ]; then
+    set -a
+    source "$REPO_ROOT/.env"
+    set +a
+fi
+
 DOCKER_DIR="$REPO_ROOT/docker"
 COMPOSE_CMD=(docker compose -p deer-flow -f "$DOCKER_DIR/docker-compose.yaml")
 

@@ -24,16 +24,23 @@ export function assertNever(x: never): never {
   throw new Error(`Unexpected auth result: ${JSON.stringify(x)}`);
 }
 
+export function buildLoginUrl(returnPath: string): string {
+  return `/login?next=${encodeURIComponent(returnPath)}`;
+}
+
 // ── Backend error response parsing ────────────────────────────────
 
-export type AuthErrorCode =
-  | "invalid_credentials"
-  | "token_expired"
-  | "token_invalid"
-  | "user_not_found"
-  | "email_already_exists"
-  | "provider_not_found"
-  | "not_authenticated";
+const AUTH_ERROR_CODES = [
+  "invalid_credentials",
+  "token_expired",
+  "token_invalid",
+  "user_not_found",
+  "email_already_exists",
+  "provider_not_found",
+  "not_authenticated",
+] as const;
+
+export type AuthErrorCode = (typeof AUTH_ERROR_CODES)[number];
 
 export interface AuthErrorResponse {
   code: AuthErrorCode;
@@ -41,15 +48,7 @@ export interface AuthErrorResponse {
 }
 
 const authErrorSchema = z.object({
-  code: z.enum([
-    "invalid_credentials",
-    "token_expired",
-    "token_invalid",
-    "user_not_found",
-    "email_already_exists",
-    "provider_not_found",
-    "not_authenticated",
-  ]),
+  code: z.enum(AUTH_ERROR_CODES),
   message: z.string(),
 });
 

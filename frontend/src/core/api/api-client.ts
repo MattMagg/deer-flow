@@ -12,6 +12,7 @@ function createCompatibleClient(isMock?: boolean): LangGraphClient {
     apiUrl: getLangGraphBaseURL(isMock),
     onRequest: (_url, init) => ({
       ...init,
+      credentials: "include",
       headers: { ...init.headers, ...getCsrfHeaders() },
     }),
   });
